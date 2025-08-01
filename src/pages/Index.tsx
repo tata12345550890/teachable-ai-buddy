@@ -1,7 +1,7 @@
-import { ChatInterface } from "@/components/ChatInterface";
+import { CrackDetector } from "@/components/CrackDetector";
 
 const Index = () => {
-  return <ChatInterface />;
+  return <CrackDetector />;
 };
 
 export default Index;
