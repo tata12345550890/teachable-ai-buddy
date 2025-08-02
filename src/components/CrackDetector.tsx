@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useCamera } from "@/hooks/useCamera";
-import { useTeachableMachine } from "@/hooks/useTeachableMachine";
-import { Prediction } from "@/services/teachableMachineService";
-import { PhotoUpload } from "./PhotoUpload";
+import { useTensorFlow } from "@/hooks/useTensorFlow";
+import { CrackPrediction } from "@/services/tensorflowService";
+import { TensorFlowPhotoUpload } from "./TensorFlowPhotoUpload";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,32 +41,39 @@ export const CrackDetector = () => {
   const {
     loadModel,
     predict,
-    getMaxPredictions,
     isLoaded: isModelLoaded,
     isLoading: isModelLoading,
     loadingProgress,
     error: modelError
-  } = useTeachableMachine();
+  } = useTensorFlow();
 
-  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [prediction, setPrediction] = useState<CrackPrediction | null>(null);
   const [isDetecting, setIsDetecting] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [modelUrl, setModelUrl] = useState("https://teachablemachine.withgoogle.com/models/QVK-ZBGvn/");
+  const [modelUrl, setModelUrl] = useState("");
+  const [inputShape, setInputShape] = useState([1, 128, 128, 3]);
+  const [threshold, setThreshold] = useState(0.5);
   const [isConfiguring, setIsConfiguring] = useState(false);
 
   const [stats, setStats] = useState({
-    totalPredictions: 0,
-    highConfidencePredictions: 0,
+    totalDetections: 0,
+    cracksDetected: 0,
     avgConfidence: 0,
-    topPrediction: ''
+    lastDetection: ''
   });
 
-  // Load model on component mount
+  // Load model when configuration changes
   useEffect(() => {
     const initializeModel = async () => {
+      if (!modelUrl.trim()) return;
+      
       try {
-        await loadModel({ modelUrl });
-        toast.success("Teachable Machine model loaded successfully!");
+        await loadModel({ 
+          modelUrl: modelUrl.trim(),
+          inputShape: inputShape as [number, number, number, number],
+          threshold
+        });
+        toast.success("TensorFlow.js model loaded successfully!");
       } catch (error) {
         console.error('Failed to load model:', error);
         toast.error('Failed to load model. Please check the URL.');
@@ -76,7 +83,7 @@ export const CrackDetector = () => {
     if (modelUrl) {
       initializeModel();
     }
-  }, [modelUrl, loadModel]);
+  }, [modelUrl, inputShape, threshold, loadModel]);
 
   // Run detection loop for camera feed
   useEffect(() => {
@@ -89,25 +96,16 @@ export const CrackDetector = () => {
     const runDetection = async () => {
       if (videoRef.current && isDetecting) {
         try {
-          const newPredictions = await predict(videoRef.current);
-          setPredictions(newPredictions);
+          const newPrediction = await predict(videoRef.current);
+          setPrediction(newPrediction);
           
           // Update stats
-          const totalPreds = newPredictions.length;
-          const highConfPreds = newPredictions.filter(p => p.probability > 0.8).length;
-          const avgConf = totalPreds > 0 
-            ? newPredictions.reduce((sum, p) => sum + p.probability, 0) / totalPreds 
-            : 0;
-          const topPred = newPredictions.length > 0 
-            ? newPredictions.sort((a, b) => b.probability - a.probability)[0].className
-            : '';
-          
-          setStats({
-            totalPredictions: totalPreds,
-            highConfidencePredictions: highConfPreds,
-            avgConfidence: avgConf,
-            topPrediction: topPred
-          });
+          setStats(prev => ({
+            totalDetections: prev.totalDetections + 1,
+            cracksDetected: prev.cracksDetected + (newPrediction.classification === 'Crack' ? 1 : 0),
+            avgConfidence: (prev.avgConfidence * prev.totalDetections + newPrediction.confidence) / (prev.totalDetections + 1),
+            lastDetection: newPrediction.classification
+          }));
         } catch (error) {
           console.error('Detection error:', error);
         }
@@ -133,7 +131,7 @@ export const CrackDetector = () => {
   const handleStopCamera = () => {
     stopCamera();
     setIsDetecting(false);
-    setPredictions([]);
+    setPrediction(null);
     setIsPaused(false);
   };
 
@@ -151,7 +149,7 @@ export const CrackDetector = () => {
     if (imageData) {
       // Create download link
       const link = document.createElement('a');
-      link.download = `image-analysis-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
+      link.download = `crack-analysis-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
       link.href = imageData;
       document.body.appendChild(link);
       link.click();
@@ -164,8 +162,17 @@ export const CrackDetector = () => {
   };
 
   const handleConfigSave = async () => {
+    if (!modelUrl.trim()) {
+      toast.error("Please enter a model URL");
+      return;
+    }
+
     try {
-      await loadModel({ modelUrl });
+      await loadModel({ 
+        modelUrl: modelUrl.trim(),
+        inputShape: inputShape as [number, number, number, number],
+        threshold
+      });
       setIsConfiguring(false);
       toast.success("Model configuration updated!");
     } catch (error) {
@@ -173,9 +180,9 @@ export const CrackDetector = () => {
     }
   };
 
-  const getConfidenceColor = (probability: number) => {
-    if (probability > 0.8) return "bg-detection-confidence-high";
-    if (probability > 0.6) return "bg-detection-confidence-medium";
+  const getConfidenceColor = (confidence: number) => {
+    if (confidence > 0.8) return "bg-detection-confidence-high";
+    if (confidence > 0.6) return "bg-detection-confidence-medium";
     return "bg-detection-confidence-low";
   };
 
@@ -183,7 +190,7 @@ export const CrackDetector = () => {
     if (isModelLoading && loadingProgress) {
       return <Loader2 className="h-4 w-4 animate-spin" />;
     }
-    if (predictions.length > 0 && predictions[0].probability > 0.7) {
+    if (prediction && prediction.classification === 'Crack' && prediction.confidence > 0.7) {
       return <AlertTriangle className="h-4 w-4 text-detection-highlight" />;
     }
     return <CheckCircle2 className="h-4 w-4 text-detection-confidence-high" />;
@@ -200,11 +207,11 @@ export const CrackDetector = () => {
             </div>
           </div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
-            Teachable Machine Detector
+            TensorFlow.js Crack Detector
           </h1>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            AI-powered image classification using Google's Teachable Machine. 
-            Analyze images in real-time or upload photos for classification.
+            AI-powered crack detection using TensorFlow.js. 
+            Analyze images in real-time or upload photos for crack detection.
           </p>
         </div>
 
@@ -215,18 +222,66 @@ export const CrackDetector = () => {
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Settings className="h-5 w-5 text-primary" />
-                  <h3 className="font-medium">Model Configuration</h3>
+                  <h3 className="font-medium">TensorFlow.js Model Configuration</h3>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="modelUrl">Teachable Machine Model URL</Label>
-                  <Input
-                    id="modelUrl"
-                    value={modelUrl}
-                    onChange={(e) => setModelUrl(e.target.value)}
-                    placeholder="https://teachablemachine.withgoogle.com/models/YOUR-MODEL/"
-                    className="bg-input/50"
-                  />
+                
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="model-url">Model URL</Label>
+                    <Input
+                      id="model-url"
+                      type="url"
+                      placeholder="https://your-domain.com/path/to/model.json"
+                      value={modelUrl}
+                      onChange={(e) => setModelUrl(e.target.value)}
+                      className="mt-1"
+                    />
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Enter the URL to your TensorFlow.js model.json file
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="threshold">Detection Threshold</Label>
+                    <Input
+                      id="threshold"
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      placeholder="0.5"
+                      value={threshold}
+                      onChange={(e) => setThreshold(parseFloat(e.target.value) || 0.5)}
+                      className="mt-1"
+                    />
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Probability threshold for crack detection (0.0 - 1.0)
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label>Input Shape (Height x Width)</Label>
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        type="number"
+                        placeholder="128"
+                        value={inputShape[1]}
+                        onChange={(e) => setInputShape([1, parseInt(e.target.value) || 128, inputShape[2], 3])}
+                      />
+                      <span className="self-center">×</span>
+                      <Input
+                        type="number"
+                        placeholder="128"
+                        value={inputShape[2]}
+                        onChange={(e) => setInputShape([1, inputShape[1], parseInt(e.target.value) || 128, 3])}
+                      />
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Input dimensions your model expects
+                    </p>
+                  </div>
                 </div>
+                
                 <div className="flex gap-2">
                   <Button onClick={handleConfigSave} disabled={isModelLoading}>
                     {isModelLoading ? 'Loading...' : 'Save Configuration'}
@@ -280,6 +335,7 @@ export const CrackDetector = () => {
               Configure Model
             </Button>
           </div>
+          
           <TabsContent value="camera" className="space-y-6">
             <div className="grid lg:grid-cols-3 gap-6">
               {/* Camera Feed */}
@@ -306,13 +362,13 @@ export const CrackDetector = () => {
                               </span>
                             </div>
                             
-                            {predictions.length > 0 && predictions[0].probability > 0.5 && (
+                            {prediction && prediction.confidence > 0.5 && (
                               <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2">
                                 <div className="text-white text-sm font-medium">
-                                  {predictions[0].className}
+                                  {prediction.classification}
                                 </div>
                                 <div className="text-white/80 text-xs">
-                                  {(predictions[0].probability * 100).toFixed(1)}% confidence
+                                  {(prediction.confidence * 100).toFixed(1)}% confidence
                                 </div>
                               </div>
                             )}
@@ -324,7 +380,7 @@ export const CrackDetector = () => {
                             <Camera className="h-16 w-16 mx-auto opacity-50" />
                             <div>
                               <p className="text-lg font-medium">Camera Feed</p>
-                              <p className="text-sm">Start camera to begin real-time detection</p>
+                              <p className="text-sm">Start camera to begin real-time crack detection</p>
                             </div>
                           </div>
                         </div>
@@ -413,13 +469,13 @@ export const CrackDetector = () => {
                     </h3>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Total Classes</span>
-                        <Badge variant="outline">{isModelLoaded ? getMaxPredictions() : 0}</Badge>
+                        <span className="text-sm text-muted-foreground">Total Detections</span>
+                        <Badge variant="outline">{stats.totalDetections}</Badge>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">High Confidence</span>
+                        <span className="text-sm text-muted-foreground">Cracks Found</span>
                         <Badge className="bg-detection-confidence-high text-white">
-                          {stats.highConfidencePredictions}
+                          {stats.cracksDetected}
                         </Badge>
                       </div>
                       <div className="flex justify-between items-center">
@@ -428,11 +484,11 @@ export const CrackDetector = () => {
                           {(stats.avgConfidence * 100).toFixed(1)}%
                         </Badge>
                       </div>
-                      {stats.topPrediction && (
+                      {stats.lastDetection && (
                         <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Top Prediction</span>
+                          <span className="text-sm text-muted-foreground">Last Detection</span>
                           <Badge className="bg-primary text-primary-foreground capitalize">
-                            {stats.topPrediction}
+                            {stats.lastDetection}
                           </Badge>
                         </div>
                       )}
@@ -440,46 +496,42 @@ export const CrackDetector = () => {
                   </CardContent>
                 </Card>
 
-                {/* Active Predictions */}
+                {/* Current Prediction */}
                 <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
                   <CardContent className="p-4">
                     <h3 className="font-medium mb-4 flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4 text-primary" />
-                      Live Predictions
+                      Current Detection
                     </h3>
                     
-                    {predictions.length === 0 ? (
+                    {!prediction ? (
                       <p className="text-sm text-muted-foreground text-center py-4">
-                        No predictions available
+                        No detection available
                       </p>
                     ) : (
-                      <div className="space-y-2">
-                        {predictions
-                          .sort((a, b) => b.probability - a.probability)
-                          .slice(0, 5)
-                          .map((prediction, index) => (
-                            <div 
-                              key={index}
-                              className="p-3 rounded-lg bg-accent/50 border border-border/30"
+                      <div className="space-y-3">
+                        <div className="p-3 rounded-lg bg-accent/50 border border-border/30">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium">
+                              {prediction.classification}
+                            </span>
+                            <Badge 
+                              className={`${getConfidenceColor(prediction.confidence)} text-white text-xs`}
                             >
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-sm font-medium capitalize">
-                                  {prediction.className}
-                                </span>
-                                <Badge 
-                                  className={`${getConfidenceColor(prediction.probability)} text-white text-xs`}
-                                >
-                                  {(prediction.probability * 100).toFixed(1)}%
-                                </Badge>
-                              </div>
-                              <div className="w-full bg-muted rounded-full h-1.5">
-                                <div 
-                                  className="bg-primary h-1.5 rounded-full transition-all duration-300"
-                                  style={{ width: `${prediction.probability * 100}%` }}
-                                />
-                              </div>
-                            </div>
-                          ))}
+                              {(prediction.confidence * 100).toFixed(1)}%
+                            </Badge>
+                          </div>
+                          <div className="space-y-1 text-xs text-muted-foreground">
+                            <div>Raw Probability: {(prediction.probability * 100).toFixed(1)}%</div>
+                            <div>Threshold: {(threshold * 100).toFixed(0)}%</div>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-1.5 mt-2">
+                            <div 
+                              className="bg-primary h-1.5 rounded-full transition-all duration-300"
+                              style={{ width: `${prediction.confidence * 100}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
                     )}
                   </CardContent>
@@ -490,11 +542,11 @@ export const CrackDetector = () => {
                   <CardContent className="p-4">
                     <h3 className="font-medium mb-4">Instructions</h3>
                     <div className="space-y-2 text-sm text-muted-foreground">
-                      <p>• Point camera at objects you want to classify</p>
+                      <p>• Point camera at surfaces to detect cracks</p>
                       <p>• Ensure good lighting for best results</p>
                       <p>• Keep camera steady for accurate predictions</p>
-                      <p>• Higher confidence scores indicate more certain predictions</p>
-                      <p>• Configure model URL to use your own Teachable Machine model</p>
+                      <p>• Configure model URL to use your own TensorFlow.js model</p>
+                      <p>• Adjust threshold to control sensitivity</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -503,7 +555,7 @@ export const CrackDetector = () => {
           </TabsContent>
 
           <TabsContent value="upload">
-            <PhotoUpload 
+            <TensorFlowPhotoUpload 
               onPredict={predict}
               isModelLoaded={isModelLoaded}
             />
