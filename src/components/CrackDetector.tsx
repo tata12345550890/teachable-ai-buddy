@@ -74,8 +74,8 @@ export const CrackDetector = () => {
   const [isConfiguring, setIsConfiguring] = useState(false);
 
   // Roboflow Configuration
-  const [roboflowApiKey, setRoboflowApiKey] = useState("B7JQjj02j4");
-  const [roboflowEndpoint, setRoboflowEndpoint] = useState("ds/eVu1XpNme4");
+  const [roboflowApiKey, setRoboflowApiKey] = useState("Ao2SRjCDmSKganFBnK3u");
+  const [roboflowEndpoint, setRoboflowEndpoint] = useState("kitt/crack-detection-gpbys-8zuzz/2");
   const [roboflowThreshold, setRoboflowThreshold] = useState(0.5);
   const [isRoboflowConfiguring, setIsRoboflowConfiguring] = useState(false);
 
