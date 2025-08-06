@@ -72,9 +72,9 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
       const result = await onDetect(selectedImage);
       setDetectionResult(result);
       
-      // Draw bounding boxes on canvas
+      // Draw segmentation masks on canvas
       if (result.predictions.length > 0 && imagePreview) {
-        drawBoundingBoxes(result);
+        drawSegmentationMasks(result);
       }
 
       toast({
@@ -96,7 +96,7 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
     }
   };
 
-  const drawBoundingBoxes = (result: CrackDetectionResult) => {
+  const drawSegmentationMasks = (result: CrackDetectionResult) => {
     const canvas = canvasRef.current;
     const img = new Image();
     
@@ -111,40 +111,76 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
       // Draw the image
       ctx.drawImage(img, 0, 0);
 
-      // Draw bounding boxes with crack/non-crack labels
+      // Draw instance segmentation masks
       result.predictions.forEach((prediction, index) => {
-        const x = prediction.x - prediction.width / 2;
-        const y = prediction.y - prediction.height / 2;
-        
         // Determine if it's a crack based on class name and confidence
         const isCrack = prediction.class.toLowerCase().includes('crack') && prediction.confidence > 0.4;
         const label = isCrack ? 'CRACK' : 'NON CRACK';
         const confidence = `${Math.round(prediction.confidence * 100)}%`;
         
         // Set colors based on detection
-        const boxColor = isCrack ? '#ef4444' : '#10b981';
-        const fillColor = isCrack ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)';
+        const strokeColor = isCrack ? '#ef4444' : '#10b981';
+        const fillColor = isCrack ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)';
         
-        // Draw filled rectangle background
-        ctx.fillStyle = fillColor;
-        ctx.fillRect(x, y, prediction.width, prediction.height);
-        
-        // Draw border
-        ctx.strokeStyle = boxColor;
-        ctx.lineWidth = 3;
-        ctx.strokeRect(x, y, prediction.width, prediction.height);
-        
-        // Draw label background
-        ctx.font = 'bold 16px Arial';
-        const labelText = `${label} ${confidence}`;
-        const textWidth = ctx.measureText(labelText).width;
-        
-        ctx.fillStyle = boxColor;
-        ctx.fillRect(x, y - 30, textWidth + 12, 25);
-        
-        // Draw label text
-        ctx.fillStyle = 'white';
-        ctx.fillText(labelText, x + 6, y - 10);
+        // Draw segmentation mask if points are available
+        if (prediction.points && prediction.points.length > 0) {
+          // Create path for segmentation mask
+          ctx.beginPath();
+          ctx.moveTo(prediction.points[0].x, prediction.points[0].y);
+          
+          for (let i = 1; i < prediction.points.length; i++) {
+            ctx.lineTo(prediction.points[i].x, prediction.points[i].y);
+          }
+          ctx.closePath();
+          
+          // Fill the segmentation area
+          ctx.fillStyle = fillColor;
+          ctx.fill();
+          
+          // Stroke the boundary
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = 3;
+          ctx.stroke();
+          
+          // Find centroid for label placement
+          const centroidX = prediction.points.reduce((sum, point) => sum + point.x, 0) / prediction.points.length;
+          const centroidY = prediction.points.reduce((sum, point) => sum + point.y, 0) / prediction.points.length;
+          
+          // Draw label at centroid
+          ctx.font = 'bold 16px Arial';
+          const labelText = `${label} ${confidence}`;
+          const textWidth = ctx.measureText(labelText).width;
+          
+          ctx.fillStyle = strokeColor;
+          ctx.fillRect(centroidX - textWidth/2 - 6, centroidY - 20, textWidth + 12, 25);
+          
+          ctx.fillStyle = 'white';
+          ctx.fillText(labelText, centroidX - textWidth/2, centroidY - 2);
+        } else {
+          // Fallback to bounding box if no segmentation points
+          const x = prediction.x - prediction.width / 2;
+          const y = prediction.y - prediction.height / 2;
+          
+          // Draw filled rectangle background
+          ctx.fillStyle = fillColor;
+          ctx.fillRect(x, y, prediction.width, prediction.height);
+          
+          // Draw border
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x, y, prediction.width, prediction.height);
+          
+          // Draw label
+          ctx.font = 'bold 16px Arial';
+          const labelText = `${label} ${confidence}`;
+          const textWidth = ctx.measureText(labelText).width;
+          
+          ctx.fillStyle = strokeColor;
+          ctx.fillRect(x, y - 30, textWidth + 12, 25);
+          
+          ctx.fillStyle = 'white';
+          ctx.fillText(labelText, x + 6, y - 10);
+        }
       });
 
       // If no specific predictions but we have overall result, show it

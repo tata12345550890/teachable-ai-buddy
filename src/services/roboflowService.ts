@@ -12,6 +12,7 @@ export interface RoboflowPrediction {
   confidence: number;
   class: string;
   class_id: number;
+  points?: Array<{x: number, y: number}>; // For instance segmentation
 }
 
 export interface RoboflowResponse {
@@ -59,6 +60,9 @@ export class RoboflowService {
       const params = new URLSearchParams({
         api_key: this.config.apiKey,
         confidence: (this.config.threshold || 0.5).toString(),
+        format: 'json',
+        stroke: '5',
+        labels: 'true'
       });
 
       const response = await fetch(`${apiUrl}?${params}`, {
