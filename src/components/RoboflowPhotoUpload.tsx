@@ -111,28 +111,58 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
       // Draw the image
       ctx.drawImage(img, 0, 0);
 
-      // Draw bounding boxes
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 3;
-      ctx.font = '16px Arial';
-      ctx.fillStyle = '#ef4444';
-
+      // Draw bounding boxes with crack/non-crack labels
       result.predictions.forEach((prediction, index) => {
         const x = prediction.x - prediction.width / 2;
         const y = prediction.y - prediction.height / 2;
         
-        // Draw rectangle
+        // Determine if it's a crack based on class name and confidence
+        const isCrack = prediction.class.toLowerCase().includes('crack') && prediction.confidence > 0.4;
+        const label = isCrack ? 'CRACK' : 'NON CRACK';
+        const confidence = `${Math.round(prediction.confidence * 100)}%`;
+        
+        // Set colors based on detection
+        const boxColor = isCrack ? '#ef4444' : '#10b981';
+        const fillColor = isCrack ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)';
+        
+        // Draw filled rectangle background
+        ctx.fillStyle = fillColor;
+        ctx.fillRect(x, y, prediction.width, prediction.height);
+        
+        // Draw border
+        ctx.strokeStyle = boxColor;
+        ctx.lineWidth = 3;
         ctx.strokeRect(x, y, prediction.width, prediction.height);
         
-        // Draw label
-        const label = `${prediction.class} ${Math.round(prediction.confidence * 100)}%`;
-        const textWidth = ctx.measureText(label).width;
+        // Draw label background
+        ctx.font = 'bold 16px Arial';
+        const labelText = `${label} ${confidence}`;
+        const textWidth = ctx.measureText(labelText).width;
         
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(x, y - 25, textWidth + 10, 20);
+        ctx.fillStyle = boxColor;
+        ctx.fillRect(x, y - 30, textWidth + 12, 25);
+        
+        // Draw label text
         ctx.fillStyle = 'white';
-        ctx.fillText(label, x + 5, y - 8);
+        ctx.fillText(labelText, x + 6, y - 10);
       });
+
+      // If no specific predictions but we have overall result, show it
+      if (result.predictions.length === 0) {
+        const overallLabel = result.hasCracks ? 'CRACK DETECTED' : 'NO CRACK DETECTED';
+        
+        ctx.font = 'bold 24px Arial';
+        const textWidth = ctx.measureText(overallLabel).width;
+        const centerX = (canvas.width - textWidth) / 2;
+        
+        // Background
+        ctx.fillStyle = result.hasCracks ? '#ef4444' : '#10b981';
+        ctx.fillRect(centerX - 10, 20, textWidth + 20, 35);
+        
+        // Text
+        ctx.fillStyle = 'white';
+        ctx.fillText(overallLabel, centerX, 45);
+      }
     };
     
     img.src = imagePreview!;
@@ -295,19 +325,25 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="text-center p-4 bg-muted rounded-lg">
-                    <p className="text-2xl font-bold">
+                  <div className={`text-center p-6 rounded-lg border-2 ${
+                    detectionResult.hasCracks 
+                      ? 'bg-destructive/10 border-destructive/20' 
+                      : 'bg-green-500/10 border-green-500/20'
+                  }`}>
+                    <p className={`text-2xl font-bold ${
+                      detectionResult.hasCracks ? 'text-destructive' : 'text-green-600'
+                    }`}>
                       {detectionResult.hasCracks ? 'CRACK DETECTED' : 'NO CRACKS'}
                     </p>
                     <p className="text-muted-foreground">Classification</p>
                   </div>
-                  <div className="text-center p-4 bg-muted rounded-lg">
-                    <p className="text-2xl font-bold">
+                  <div className="text-center p-6 bg-primary/10 border-2 border-primary/20 rounded-lg">
+                    <p className="text-2xl font-bold text-primary">
                       {Math.round(detectionResult.confidence * 100)}%
                     </p>
                     <p className="text-muted-foreground">Max Confidence</p>
                   </div>
-                  <div className="text-center p-4 bg-muted rounded-lg">
+                  <div className="text-center p-6 bg-muted/50 border-2 border-border rounded-lg">
                     <p className="text-2xl font-bold">
                       {detectionResult.totalCracks}
                     </p>
@@ -316,17 +352,40 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
                 </div>
 
                 {detectionResult.predictions.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="font-medium mb-2">Detection Details:</h4>
-                    <div className="space-y-2">
-                      {detectionResult.predictions.map((prediction, index) => (
-                        <div key={index} className="flex justify-between items-center p-2 bg-muted/50 rounded">
-                          <span className="font-medium">{prediction.class}</span>
-                          <span className="text-sm text-muted-foreground">
-                            {Math.round(prediction.confidence * 100)}% confidence
-                          </span>
-                        </div>
-                      ))}
+                  <div className="mt-6">
+                    <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <Eye className="h-5 w-5" />
+                      Individual Detection Details
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {detectionResult.predictions.map((prediction, index) => {
+                        const isCrack = prediction.class.toLowerCase().includes('crack') && prediction.confidence > 0.4;
+                        return (
+                          <div key={index} className={`p-4 rounded-lg border-2 ${
+                            isCrack 
+                              ? 'bg-destructive/10 border-destructive/20' 
+                              : 'bg-green-500/10 border-green-500/20'
+                          }`}>
+                            <div className="flex justify-between items-center">
+                              <span className={`font-bold text-lg ${
+                                isCrack ? 'text-destructive' : 'text-green-600'
+                              }`}>
+                                {isCrack ? 'CRACK' : 'NON CRACK'}
+                              </span>
+                              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                isCrack 
+                                  ? 'bg-destructive text-destructive-foreground' 
+                                  : 'bg-green-600 text-white'
+                              }`}>
+                                {Math.round(prediction.confidence * 100)}%
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Detection #{index + 1} • Original class: {prediction.class}
+                            </p>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
