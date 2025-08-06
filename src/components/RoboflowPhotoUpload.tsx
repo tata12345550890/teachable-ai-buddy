@@ -27,8 +27,8 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
   const handleFileSelect = (file: File) => {
     if (!file.type.startsWith('image/')) {
       toast({
-        title: "Invalid file type",
-        description: "Please select an image file",
+        title: "รูปแบบไฟล์ไม่ถูกต้อง",
+        description: "กรุณาเลือกไฟล์รูปภาพ",
         variant: "destructive"
       });
       return;
@@ -36,8 +36,8 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
 
     if (file.size > 10 * 1024 * 1024) {
       toast({
-        title: "File too large",
-        description: "Please select an image smaller than 10MB",
+        title: "ไฟล์ใหญ่เกินไป",
+        description: "กรุณาเลือกไฟล์ที่มีขนาดน้อยกว่า 10MB",
         variant: "destructive"
       });
       return;
@@ -78,17 +78,17 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
       }
 
       toast({
-        title: "Analysis Complete",
+        title: "การวิเคราะห์เสร็จสิ้น",
         description: result.hasCracks 
-          ? `Found ${result.totalCracks} crack(s) with ${Math.round(result.confidence * 100)}% confidence`
-          : "No cracks detected",
+          ? `พบรอยร้าว ${result.totalCracks} จุด ด้วยความมั่นใจ ${Math.round(result.confidence * 100)}%`
+          : "ไม่พบรอยร้าว",
         variant: result.hasCracks ? "destructive" : "default"
       });
     } catch (error) {
       console.error('Analysis error:', error);
       toast({
-        title: "Analysis Failed",
-        description: error instanceof Error ? error.message : "Unknown error occurred",
+        title: "การวิเคราะห์ล้มเหลว",
+        description: error instanceof Error ? error.message : "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ",
         variant: "destructive"
       });
     } finally {
@@ -115,7 +115,7 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
       result.predictions.forEach((prediction, index) => {
         // Determine if it's a crack based on class name and confidence
         const isCrack = prediction.class.toLowerCase().includes('crack') && prediction.confidence > 0.4;
-        const label = isCrack ? 'CRACK' : 'NON CRACK';
+        const label = isCrack ? 'รอยร้าว' : 'ไม่มีรอยร้าว';
         const confidence = `${Math.round(prediction.confidence * 100)}%`;
         
         // Set colors based on detection
@@ -185,7 +185,7 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
 
       // If no specific predictions but we have overall result, show it
       if (result.predictions.length === 0) {
-        const overallLabel = result.hasCracks ? 'CRACK DETECTED' : 'NO CRACK DETECTED';
+        const overallLabel = result.hasCracks ? 'พบรอยร้าว' : 'ไม่พบรอยร้าว';
         
         ctx.font = 'bold 24px Arial';
         const textWidth = ctx.measureText(overallLabel).width;
@@ -231,7 +231,7 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `roboflow-analysis-${Date.now()}.json`;
+    a.download = `ผลการวิเคราะห์-roboflow-${Date.now()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -244,10 +244,10 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-yellow-500" />
-            Roboflow Not Configured
+            Roboflow ยังไม่ได้ตั้งค่า
           </CardTitle>
           <CardDescription>
-            Please configure your Roboflow API settings first
+            กรุณาตั้งค่า Roboflow API ก่อนใช้งาน
           </CardDescription>
         </CardHeader>
       </Card>
@@ -259,9 +259,9 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
       {!selectedImage ? (
         <Card>
           <CardHeader>
-            <CardTitle>Upload Image for Analysis</CardTitle>
+            <CardTitle>อัปโหลดรูปภาพเพื่อวิเคราะห์</CardTitle>
             <CardDescription>
-              Select an image to detect cracks using Roboflow AI
+              เลือกรูปภาพเพื่อตรวจจับรอยร้าวด้วย Roboflow AI
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -272,10 +272,10 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
               onClick={() => fileInputRef.current?.click()}
             >
               <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-lg font-medium mb-2">Drop your image here</p>
-              <p className="text-muted-foreground mb-4">or click to browse files</p>
+              <p className="text-lg font-medium mb-2">วางรูปภาพที่นี่</p>
+              <p className="text-muted-foreground mb-4">หรือคลิกเพื่อเลือกไฟล์</p>
               <Button variant="outline">
-                Select Image
+                เลือกรูปภาพ
               </Button>
             </div>
             <Input
@@ -295,7 +295,7 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Image Analysis</span>
+                <span>การวิเคราะห์รูปภาพ</span>
                 <div className="flex gap-2">
                   <Button
                     onClick={analyzeImage}
@@ -307,7 +307,7 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
                     ) : (
                       <Eye className="h-4 w-4" />
                     )}
-                    {isAnalyzing ? 'Analyzing...' : 'Analyze'}
+                    {isAnalyzing ? 'กำลังวิเคราะห์...' : 'วิเคราะห์'}
                   </Button>
                   <Button variant="outline" onClick={clearImage}>
                     <Trash2 className="h-4 w-4" />
@@ -342,11 +342,11 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
                   ) : (
                     <CheckCircle className="h-5 w-5 text-green-500" />
                   )}
-                  Detection Results
+                  ผลการตรวจจับ
                 </CardTitle>
                 <div className="flex justify-between items-center">
                   <CardDescription>
-                    Roboflow AI Analysis Complete
+                    การวิเคราะห์ด้วย Roboflow AI เสร็จสิ้น
                   </CardDescription>
                   <Button
                     variant="outline"
@@ -355,7 +355,7 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
                     className="flex items-center gap-2"
                   >
                     <Download className="h-4 w-4" />
-                    Download Results
+                    ดาวน์โหลดผลลัพธ์
                   </Button>
                 </div>
               </CardHeader>
@@ -369,21 +369,21 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
                     <p className={`text-2xl font-bold ${
                       detectionResult.hasCracks ? 'text-destructive' : 'text-green-600'
                     }`}>
-                      {detectionResult.hasCracks ? 'CRACK DETECTED' : 'NO CRACKS'}
+                      {detectionResult.hasCracks ? 'พบรอยร้าว' : 'ไม่พบรอยร้าว'}
                     </p>
-                    <p className="text-muted-foreground">Classification</p>
+                    <p className="text-muted-foreground">การจำแนกประเภท</p>
                   </div>
                   <div className="text-center p-6 bg-primary/10 border-2 border-primary/20 rounded-lg">
                     <p className="text-2xl font-bold text-primary">
                       {Math.round(detectionResult.confidence * 100)}%
                     </p>
-                    <p className="text-muted-foreground">Max Confidence</p>
+                    <p className="text-muted-foreground">ความมั่นใจสูงสุด</p>
                   </div>
                   <div className="text-center p-6 bg-muted/50 border-2 border-border rounded-lg">
                     <p className="text-2xl font-bold">
                       {detectionResult.totalCracks}
                     </p>
-                    <p className="text-muted-foreground">Total Detections</p>
+                    <p className="text-muted-foreground">จำนวนที่ตรวจพบ</p>
                   </div>
                 </div>
 
@@ -391,7 +391,7 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
                   <div className="mt-6">
                     <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
                       <Eye className="h-5 w-5" />
-                      Individual Detection Details
+                      รายละเอียดการตรวจจับแต่ละจุด
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {detectionResult.predictions.map((prediction, index) => {
@@ -406,7 +406,7 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
                               <span className={`font-bold text-lg ${
                                 isCrack ? 'text-destructive' : 'text-green-600'
                               }`}>
-                                {isCrack ? 'CRACK' : 'NON CRACK'}
+                                {isCrack ? 'รอยร้าว' : 'ไม่มีรอยร้าว'}
                               </span>
                               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                                 isCrack 
@@ -417,7 +417,7 @@ export const RoboflowPhotoUpload: React.FC<RoboflowPhotoUploadProps> = ({
                               </span>
                             </div>
                             <p className="text-sm text-muted-foreground mt-1">
-                              Detection #{index + 1} • Original class: {prediction.class}
+                              การตรวจจับที่ #{index + 1} • คลาสเดิม: {prediction.class}
                             </p>
                           </div>
                         );
