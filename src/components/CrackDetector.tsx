@@ -75,8 +75,8 @@ export const CrackDetector = () => {
 
   // Roboflow Configuration
   const [roboflowApiKey, setRoboflowApiKey] = useState("Ao2SRjCDmSKganFBnK3u");
-  const [roboflowEndpoint, setRoboflowEndpoint] = useState("kitt/crack-detection-gpbys-8zuzz/2");
-  const [roboflowThreshold, setRoboflowThreshold] = useState(0.5);
+  const [roboflowEndpoint, setRoboflowEndpoint] = useState("apex-crackai/2");
+  const [roboflowThreshold, setRoboflowThreshold] = useState(0.4);
   const [isRoboflowConfiguring, setIsRoboflowConfiguring] = useState(false);
 
   const [stats, setStats] = useState({
